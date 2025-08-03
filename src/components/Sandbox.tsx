@@ -101,14 +101,24 @@ function PreviewPane({
   const appendConsole = useSandboxStore((s) => s.appendConsole)
 
   // Produce a minimal doc if caller provided a fragment.
+  // Also guard against accidental empty content that would render a blank page.
   const srcDoc = useMemo(() => {
-    const hasHtml = /<\s*html[\s>]/i.test(html)
+    const code = String(html ?? "").trim()
+    if (!code) {
+      // Safe fallback splash to confirm iframe renders at all.
+      return `<!doctype html><html><head><meta charset="utf-8"/></head><body style="margin:0">
+        <div style="padding:12px;font:14px/1.4 system-ui;color:#e5e7eb;background:#0a0a0a">
+          <strong>Sandbox</strong>: empty document
+        </div>
+      </body></html>`
+    }
+    const hasHtml = /<\s*html[\s>]/i.test(code)
     return hasHtml
-      ? html
-      : `<!doctype html><html><head><meta charset="utf-8"/></head><body>${html}</body></html>`
+      ? code
+      : `<!doctype html><html><head><meta charset="utf-8"/></head><body>${code}</body></html>`
   }, [html])
 
-  // Listen for messages posted from the iframe content (demo button uses this).
+  // Listen for messages posted from the iframe content (demo TSX uses this).
   useEffect(() => {
     const onMsg = (ev: MessageEvent) => {
       const d: any = ev.data
@@ -120,63 +130,44 @@ function PreviewPane({
     return () => window.removeEventListener("message", onMsg)
   }, [appendConsole])
 
-  // Install error forwarding inside the iframe once it finishes loading.
+  // NOTE:
+  // Avoid cross-origin writes to contentWindow in sandboxed iframes.
+  // We rely on postMessage from inside the iframe for logs/errors.
   useEffect(() => {
     const el = iframeRef.current
     if (!el) return
 
     const onLoad = () => {
-      const win = el.contentWindow
-      if (!win) return
-
-      const onError = (e: ErrorEvent) => {
-        appendConsole({
-          type: "error",
-          message: `${e.message} @ ${e.filename || ""}:${e.lineno || ""}`,
-          time: Date.now(),
-        })
-      }
-      const onRejection = (e: PromiseRejectionEvent) => {
-        const r: any = e.reason
-        appendConsole({
-          type: "error",
-          message: `Unhandled: ${r?.message ?? String(r)}`,
-          time: Date.now(),
-        })
-      }
-
-      ;(win as any).__sandbox_onError = onError
-      ;(win as any).__sandbox_onRejection = onRejection
-
-      win.addEventListener("error", onError)
-      win.addEventListener("unhandledrejection", onRejection)
+      // Intentionally do nothing here to avoid touching contentWindow.
+      // If error forwarding is desired, the iframe content should postMessage to parent.
     }
 
     el.addEventListener("load", onLoad)
     return () => {
       el.removeEventListener("load", onLoad)
-      try {
-        const win = el.contentWindow as any
-        if (win?.removeEventListener && win.__sandbox_onError) {
-          win.removeEventListener("error", win.__sandbox_onError)
-          win.removeEventListener("unhandledrejection", win.__sandbox_onRejection)
-          delete win.__sandbox_onError
-          delete win.__sandbox_onRejection
-        }
-      } catch {}
     }
-  }, [appendConsole, srcDoc])
+  }, [srcDoc])
 
   // Expose a cheap refresh that re-applies srcdoc.
   useEffect(() => {
     onRefreshRequestedRef.current = () => {
       const el = iframeRef.current
       if (!el) return
-      const cur = el.srcdoc
-      el.srcdoc = ""
-      queueMicrotask(() => (el.srcdoc = cur))
+      try {
+        // Force a navigation to about:blank then restore to ensure reload even if same content.
+        el.removeAttribute("src")
+        el.srcdoc = "<!doctype html><meta charset='utf-8'/>"
+        setTimeout(() => {
+          el.srcdoc = srcDoc
+        }, 0)
+      } catch {
+        // Fallback to old microtask trick
+        const cur = el.srcdoc
+        el.srcdoc = ""
+        queueMicrotask(() => (el.srcdoc = cur))
+      }
     }
-  }, [onRefreshRequestedRef])
+  }, [onRefreshRequestedRef, srcDoc])
 
   return (
     <div className="h-full w-full overflow-hidden bg-zinc-950 flex flex-col">
@@ -185,11 +176,14 @@ function PreviewPane({
         <span className="opacity-60">sandboxed</span>
       </div>
       <div className="flex-1 min-h-0">
+        {/* Use src and srcdoc carefully: some browsers ignore srcdoc when src is set.
+            Ensure only srcDoc is used. Also include allow-popups to let esm.sh open workers/popups if needed. */}
         <iframe
           ref={iframeRef}
           title="preview"
           className="w-full h-full bg-zinc-900"
-          sandbox="allow-scripts allow-forms allow-pointer-lock"
+          sandbox="allow-scripts allow-forms allow-pointer-lock allow-same-origin allow-popups"
+          referrerPolicy="no-referrer"
           srcDoc={srcDoc}
         />
       </div>

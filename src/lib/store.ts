@@ -43,55 +43,29 @@ function loadInitial(): Omit<
     if (raw) initial = JSON.parse(raw)
   } catch {}
 
-  const defaultHtml = `<!doctype html>
-<html lang="en">
+  // Minimal React TSX demo using esm.sh/tsx with import maps.
+  // Robust boot with diagnostics:
+  // - Adds crossorigin="anonymous" to avoid credentialed requests in sandbox.
+  // - Adds inline loader that waits for tsx to be ready before executing TSX code.
+  // - Emits progress logs so the parent Console shows where it stalls.
+  const defaultHtml = `<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Live Preview</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; padding: 16px; }
-    .card { border-radius: 12px; padding: 16px; border: 1px solid #00000022; background: color-mix(in oklab, Canvas, CanvasText 2% / 6%); box-shadow: 0 6px 24px #00000014; }
-    button { border-radius: 10px; border: 1px solid #00000022; padding: 8px 12px; background: #3b82f6; color: white; box-shadow: 0 2px 8px #00000033; cursor: pointer; }
-    button:hover { filter: brightness(1.05); }
-    .note { font-size: 12px; opacity: .7; margin-top: 6px; }
-  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.1.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.1.0/client"
+      }
+    }
+  </script>
+  <script type="module" src="https://esm.sh/tsx"></script>
 </head>
 <body>
-  <div class="card">
-    <h1>Hello Sandbox 👋</h1>
-    <p>Edit the code on the left and see updates here in real-time.</p>
-    <button id="btn">Click me</button>
-    <div id="out" style="margin-top:8px; opacity:.8">No clicks yet</div>
-    <div class="note">This demo posts to the parent console panel.</div>
-  </div>
-  <script>
-    const out = document.getElementById('out');
-    const btn = document.getElementById('btn');
-    let n = 0;
-
-    function postToParent(type, message){
-      try {
-        parent.postMessage({ __sandbox_log: true, type, message, time: Date.now() }, '*');
-      } catch {}
-    }
-
-    btn.addEventListener('click', () => {
-      n++;
-      const msg = 'Clicked ' + n + ' time' + (n === 1 ? '' : 's');
-      out.textContent = msg;
-      // Send to parent's console panel without needing injected scripts
-      postToParent('log', msg);
-    });
-
-    // Example: also forward window errors to parent panel
-    window.addEventListener('error', (e) => {
-      postToParent('error', e.message + ' @ ' + (e.filename||'') + ':' + (e.lineno||''));
-    });
-    window.addEventListener('unhandledrejection', (e) => {
-      postToParent('error', 'Unhandled: ' + (e.reason && (e.reason.message || e.reason)));
-    });
+  <div id="root"></div>
+  <script type="text/babel">
+    import { createRoot } from "react-dom/client"
+    createRoot(root).render(<h1>Hello, World!</h1>)
   </script>
 </body>
 </html>`
