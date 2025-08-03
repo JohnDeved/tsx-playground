@@ -1,21 +1,18 @@
 import { create } from "zustand"
 
 type Orientation = "horizontal" | "vertical"
-type Fullscreen = "none" | "editor" | "preview"
 type ConsoleEntry = { type: "log" | "warn" | "error"; message: string; time: number }
 
 type LayoutState = {
   orientation: Orientation
-  // ratios between 0 and 1
-  editorRatio: number
-  previewRatio: number
+  editorRatio: number // 0..1
+  previewRatio: number // 0..1
 }
 
 type SandboxState = {
   editorContent: string
   fontSize: number
   theme: "light" | "dark"
-  fullscreen: Fullscreen
   layout: LayoutState
   consoleOpen: boolean
   consoleLogs: ConsoleEntry[]
@@ -23,29 +20,28 @@ type SandboxState = {
   setEditorContent: (v: string) => void
   setFontSize: (v: number) => void
   setTheme: (v: "light" | "dark") => void
-  setFullscreen: (v: Fullscreen) => void
   setLayout: (v: Partial<LayoutState>) => void
-  resetLayout: () => void
 
   appendConsole: (e: ConsoleEntry | ConsoleEntry[]) => void
   clearConsole: () => void
   setConsoleOpen: (v: boolean) => void
 }
 
-// Simple, tiny persistence layer with versioning
 const STORAGE_KEY = "sandbox:v1"
 
-function loadInitial(): Omit<SandboxState, keyof Pick<SandboxState,
-  "setEditorContent" | "setFontSize" | "setTheme" | "setFullscreen" | "setLayout" | "resetLayout" |
-  "appendConsole" | "clearConsole" | "setConsoleOpen"
->> {
+function clamp01(v: number) {
+  return Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.5))
+}
+
+function loadInitial(): Omit<
+  SandboxState,
+  "setEditorContent" | "setFontSize" | "setTheme" | "setLayout" | "appendConsole" | "clearConsole" | "setConsoleOpen"
+> {
   let initial: any = null
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) initial = JSON.parse(raw)
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   const defaultHtml = `<!doctype html>
 <html lang="en">
@@ -57,8 +53,9 @@ function loadInitial(): Omit<SandboxState, keyof Pick<SandboxState,
     :root { color-scheme: light dark; }
     body { font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; padding: 16px; }
     .card { border-radius: 12px; padding: 16px; border: 1px solid #00000022; background: color-mix(in oklab, Canvas, CanvasText 2% / 6%); box-shadow: 0 6px 24px #00000014; }
-    button { border-radius: 10px; border: 1px solid #00000022; padding: 8px 12px; background: #3b82f6; color: white; box-shadow: 0 2px 8px #00000033; }
+    button { border-radius: 10px; border: 1px solid #00000022; padding: 8px 12px; background: #3b82f6; color: white; box-shadow: 0 2px 8px #00000033; cursor: pointer; }
     button:hover { filter: brightness(1.05); }
+    .note { font-size: 12px; opacity: .7; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -67,15 +64,33 @@ function loadInitial(): Omit<SandboxState, keyof Pick<SandboxState,
     <p>Edit the code on the left and see updates here in real-time.</p>
     <button id="btn">Click me</button>
     <div id="out" style="margin-top:8px; opacity:.8">No clicks yet</div>
+    <div class="note">This demo posts to the parent console panel.</div>
   </div>
   <script>
     const out = document.getElementById('out');
     const btn = document.getElementById('btn');
     let n = 0;
+
+    function postToParent(type, message){
+      try {
+        parent.postMessage({ __sandbox_log: true, type, message, time: Date.now() }, '*');
+      } catch {}
+    }
+
     btn.addEventListener('click', () => {
       n++;
-      console.log('Clicked', n);
-      out.textContent = \`Clicked \${n} times\`;
+      const msg = 'Clicked ' + n + ' time' + (n === 1 ? '' : 's');
+      out.textContent = msg;
+      // Send to parent's console panel without needing injected scripts
+      postToParent('log', msg);
+    });
+
+    // Example: also forward window errors to parent panel
+    window.addEventListener('error', (e) => {
+      postToParent('error', e.message + ' @ ' + (e.filename||'') + ':' + (e.lineno||''));
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      postToParent('error', 'Unhandled: ' + (e.reason && (e.reason.message || e.reason)));
     });
   </script>
 </body>
@@ -85,9 +100,8 @@ function loadInitial(): Omit<SandboxState, keyof Pick<SandboxState,
     editorContent: initial?.editorContent ?? defaultHtml,
     fontSize: initial?.fontSize ?? 14,
     theme: initial?.theme ?? "light",
-    fullscreen: initial?.fullscreen ?? "none",
     layout: {
-      orientation: initial?.layout?.orientation ?? ("horizontal" as Orientation),
+      orientation: initial?.layout?.orientation ?? "horizontal",
       editorRatio: clamp01(initial?.layout?.editorRatio ?? 0.5),
       previewRatio: clamp01(initial?.layout?.previewRatio ?? 0.5),
     },
@@ -96,57 +110,29 @@ function loadInitial(): Omit<SandboxState, keyof Pick<SandboxState,
   }
 }
 
-function clamp01(v: number) {
-  if (typeof v !== "number" || Number.isNaN(v)) return 0.5
-  return Math.max(0, Math.min(1, v))
-}
-
 export const useSandboxStore = create<SandboxState>((set, get) => ({
   ...loadInitial(),
 
   setEditorContent(v) {
-    set({ editorContent: v })
-    persist()
+    set({ editorContent: v }); persist()
   },
   setFontSize(v) {
-    set({ fontSize: Math.max(10, Math.min(28, v)) })
-    persist()
+    set({ fontSize: Math.max(10, Math.min(28, v)) }); persist()
   },
   setTheme(v) {
-    // Update html class immediately for Tailwind dark mode
-    if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("dark", v === "dark")
-    }
-    set({ theme: v })
-    persist()
-  },
-  setFullscreen(v) {
-    set({ fullscreen: v })
-    persist()
+    document?.documentElement.classList.toggle("dark", v === "dark")
+    set({ theme: v }); persist()
   },
   setLayout(v) {
     const cur = get().layout
-    const next = {
-      ...cur,
-      ...v,
-    }
-    // normalize ratios
+    const next = { ...cur, ...v }
     const total = (next.editorRatio ?? 0.5) + (next.previewRatio ?? 0.5)
-    if (total !== 1 && total > 0) {
+    if (total > 0 && total !== 1) {
       const e = clamp01((next.editorRatio ?? 0.5) / total)
-      const p = clamp01((next.previewRatio ?? 0.5) / total)
       next.editorRatio = e
-      next.previewRatio = p
+      next.previewRatio = clamp01(1 - e)
     }
-    set({ layout: next })
-    persist()
-  },
-  resetLayout() {
-    set({
-      layout: { orientation: "horizontal", editorRatio: 0.5, previewRatio: 0.5 },
-      fullscreen: "none",
-    })
-    persist()
+    set({ layout: next }); persist()
   },
 
   appendConsole(e) {
@@ -163,12 +149,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
 
 function persist() {
   try {
-    const { editorContent, fontSize, theme, fullscreen, layout } = useSandboxStore.getState()
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ editorContent, fontSize, theme, fullscreen, layout }),
-    )
-  } catch {
-    // ignore
-  }
+    const { editorContent, fontSize, theme, layout } = useSandboxStore.getState()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ editorContent, fontSize, theme, layout }))
+  } catch {}
 }
