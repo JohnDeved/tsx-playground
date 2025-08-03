@@ -5,20 +5,27 @@ import Editor from "@monaco-editor/react"
 import { useSandboxStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
-/** Minimal Monaco HTML editor */
+/** Minimal Monaco TSX editor (App.tsx) */
 function EditorPane(props: { value: string; onChange: (v: string) => void; fontSize: number }) {
   const { value, onChange, fontSize } = props
   return (
     <div className="h-full w-full overflow-hidden">
       <div className="h-10 border-b border-zinc-800/80 flex items-center px-3 text-xs text-zinc-400 bg-zinc-950/60">
-        <span className="truncate">index.html</span>
+        <span className="truncate">App.tsx</span>
       </div>
       <Editor
         height="calc(100% - 2.5rem)"
-        defaultLanguage="html"
+        defaultLanguage="typescript"
+        path="App.tsx"
         value={value}
         onChange={(v) => onChange(v ?? "")}
         theme="vs-dark"
+        onMount={(_, monaco) => {
+          // monaco.languages.typescript.typescriptDefaults.addExtraLib() // dynamically add used libs from esm.sh X-TypeScript-Types header
+          monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+            jsx: monaco.languages.typescript.JsxEmit.ReactJSX
+          })
+        }}
         options={{
           fontSize,
           minimap: { enabled: false },
@@ -85,40 +92,53 @@ function ConsolePanel() {
 }
 
 /**
- * PreviewPane: sandboxed iframe preview without injecting inline scripts.
- * - We keep the provided HTML untouched (except wrapping if there's no <html> tag).
- * - We attach error/unhandledrejection listeners inside the iframe after it loads.
- * - Console logs are not auto-forwarded unless the page itself posts messages.
+ * PreviewPane: run App.tsx using esm.sh/tsx and render default export into #root.
  */
 function PreviewPane({
-  html,
-  onRefreshRequestedRef,
+  code,
 }: {
-  html: string
-  onRefreshRequestedRef: React.MutableRefObject<() => void>
+  code: string
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const appendConsole = useSandboxStore((s) => s.appendConsole)
 
-  // Produce a minimal doc if caller provided a fragment.
-  // Also guard against accidental empty content that would render a blank page.
-  const srcDoc = useMemo(() => {
-    const code = String(html ?? "").trim()
-    if (!code) {
-      // Safe fallback splash to confirm iframe renders at all.
-      return `<!doctype html><html><head><meta charset="utf-8"/></head><body style="margin:0">
-        <div style="padding:12px;font:14px/1.4 system-ui;color:#e5e7eb;background:#0a0a0a">
-          <strong>Sandbox</strong>: empty document
-        </div>
-      </body></html>`
-    }
-    const hasHtml = /<\s*html[\s>]/i.test(code)
-    return hasHtml
-      ? code
-      : `<!doctype html><html><head><meta charset="utf-8"/></head><body>${code}</body></html>`
-  }, [html])
+  // extract imports used in the code
+  const found: string[] = useMemo(() => {
+    if (!code) return []
+    return Array.from(code.matchAll(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/g), m => m[1])
+  }, [code])
 
-  // Listen for messages posted from the iframe content (demo TSX uses this).
+  console.log("Preview imports:", found)
+
+  const srcDoc = useMemo(() => {
+    const bootstrap = `<!DOCTYPE html>
+      <html>
+      <head>
+        <script type="importmap">
+          {
+            "imports": ${JSON.stringify({
+              "react": "https://esm.sh/react",
+              "react-dom/client": "https://esm.sh/react-dom/client",
+              ...Object.fromEntries(Array.from(found).map(i => [i, `https://esm.sh/${i}`]))
+            })}
+          }
+        </script>
+        <script type="module" src="https://esm.sh/tsx"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+      </head>
+      <body>
+        <div id="root"></div>
+        <script type="text/babel">
+        import { createRoot } from "react-dom/client";
+         ${code}
+          createRoot(root).render(<App />);
+        </script>
+      </body>
+      </html>`
+    return bootstrap
+  }, [code])
+
+  // Receive logs from iframe
   useEffect(() => {
     const onMsg = (ev: MessageEvent) => {
       const d: any = ev.data
@@ -130,54 +150,13 @@ function PreviewPane({
     return () => window.removeEventListener("message", onMsg)
   }, [appendConsole])
 
-  // NOTE:
-  // Avoid cross-origin writes to contentWindow in sandboxed iframes.
-  // We rely on postMessage from inside the iframe for logs/errors.
-  useEffect(() => {
-    const el = iframeRef.current
-    if (!el) return
-
-    const onLoad = () => {
-      // Intentionally do nothing here to avoid touching contentWindow.
-      // If error forwarding is desired, the iframe content should postMessage to parent.
-    }
-
-    el.addEventListener("load", onLoad)
-    return () => {
-      el.removeEventListener("load", onLoad)
-    }
-  }, [srcDoc])
-
-  // Expose a cheap refresh that re-applies srcdoc.
-  useEffect(() => {
-    onRefreshRequestedRef.current = () => {
-      const el = iframeRef.current
-      if (!el) return
-      try {
-        // Force a navigation to about:blank then restore to ensure reload even if same content.
-        el.removeAttribute("src")
-        el.srcdoc = "<!doctype html><meta charset='utf-8'/>"
-        setTimeout(() => {
-          el.srcdoc = srcDoc
-        }, 0)
-      } catch {
-        // Fallback to old microtask trick
-        const cur = el.srcdoc
-        el.srcdoc = ""
-        queueMicrotask(() => (el.srcdoc = cur))
-      }
-    }
-  }, [onRefreshRequestedRef, srcDoc])
-
   return (
     <div className="h-full w-full overflow-hidden bg-zinc-950 flex flex-col">
       <div className="h-10 border-b border-zinc-800/80 flex items-center justify-between px-3 text-xs text-zinc-400 bg-zinc-950/60 shrink-0">
         <span className="truncate">Preview</span>
-        <span className="opacity-60">sandboxed</span>
+        <span className="opacity-60">tsx via esm.sh</span>
       </div>
       <div className="flex-1 min-h-0">
-        {/* Use src and srcdoc carefully: some browsers ignore srcdoc when src is set.
-            Ensure only srcDoc is used. Also include allow-popups to let esm.sh open workers/popups if needed. */}
         <iframe
           ref={iframeRef}
           title="preview"
@@ -199,9 +178,9 @@ export default function Sandbox() {
   const setLayout = useSandboxStore((s) => s.setLayout)
 
   // Debounce preview updates
-  const [debouncedHtml, setDebouncedHtml] = useState(editorContent)
+  const [debouncedCode, setDebouncedCode] = useState(editorContent)
   useEffect(() => {
-    const id = setTimeout(() => setDebouncedHtml(editorContent), 250)
+    const id = setTimeout(() => setDebouncedCode(editorContent), 250)
     return () => clearTimeout(id)
   }, [editorContent])
 
@@ -253,7 +232,7 @@ export default function Sandbox() {
               <ResizablePanel defaultSize={previewRatio * 100} minSize={15}>
                 <div className="h-full rounded-lg border border-zinc-800/80 overflow-hidden bg-zinc-950 flex flex-col">
                   <div className="flex-1 min-h-0">
-                    <PreviewPane html={debouncedHtml} onRefreshRequestedRef={refreshRef} />
+                    <PreviewPane code={debouncedCode} />
                   </div>
                   <ConsolePanel />
                 </div>

@@ -43,35 +43,39 @@ function loadInitial(): Omit<
     if (raw) initial = JSON.parse(raw)
   } catch {}
 
-  // Minimal React TSX demo using esm.sh/tsx with import maps.
-  // Robust boot with diagnostics:
-  // - Adds crossorigin="anonymous" to avoid credentialed requests in sandbox.
-  // - Adds inline loader that waits for tsx to be ready before executing TSX code.
-  // - Emits progress logs so the parent Console shows where it stalls.
-  const defaultHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@19.1.0",
-        "react-dom/client": "https://esm.sh/react-dom@19.1.0/client"
-      }
-    }
-  </script>
-  <script type="module" src="https://esm.sh/tsx"></script>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="text/babel">
-    import { createRoot } from "react-dom/client"
-    createRoot(root).render(<h1>Hello, World!</h1>)
-  </script>
-</body>
-</html>`
+  // Default App.tsx example rendered via esm.sh tsx at runtime
+  const defaultAppTsx = `import { IoSparkles } from "react-icons/io5";
+import { motion } from "framer-motion";
+
+export default function App() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center space-y-4"
+      >
+        <motion.h1
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.4 }}
+          className="text-3xl font-bold flex justify-center items-center gap-2 text-gray-800"
+        >
+          Welcome! <IoSparkles className="text-yellow-500" />
+        </motion.h1>
+
+        <p className="text-gray-600">
+          Start editing <code className="bg-gray-200 px-1 rounded">App.tsx</code> to refresh the preview.
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+`
 
   return {
-    editorContent: initial?.editorContent ?? defaultHtml,
+    editorContent: initial?.editorContent ?? defaultAppTsx,
     fontSize: initial?.fontSize ?? 14,
     theme: initial?.theme ?? "light",
     layout: {
