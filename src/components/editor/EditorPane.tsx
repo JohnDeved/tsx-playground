@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useCallback } from "react"
 import { init } from "modern-monaco"
 import { MONACO_CONFIG, EDITOR_OPTIONS, PANEL_HEADER_CLASS } from "@/lib/constants"
+import { parseImports, loadTypesForPackages } from "@/lib/type-loader"
 
 interface EditorPaneProps {
   value: string
@@ -12,6 +13,7 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
   const editorRef = useRef<HTMLDivElement>(null)
   const monacoRef = useRef<any>(null)
   const editorInstanceRef = useRef<any>(null)
+  const loadedTypesRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!editorRef.current || editorInstanceRef.current) return
@@ -21,8 +23,32 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
         const monaco = await init(MONACO_CONFIG)
         monacoRef.current = monaco
         
-        // Add extra type definitions for better TypeScript support
-        await addTypeDefinitions(monaco)
+        // Configure TypeScript compiler options
+        if (monaco.languages?.typescript?.typescriptDefaults) {
+          monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+            target: monaco.languages.typescript.ScriptTarget.ES2020,
+            module: monaco.languages.typescript.ModuleKind.ESNext,
+            moduleResolution: monaco.languages.typescript.ModuleResolutionKind.Bundler,
+            allowNonTsExtensions: true,
+            allowJs: true,
+            strict: true,
+            allowSyntheticDefaultImports: true,
+            esModuleInterop: true,
+            skipLibCheck: true,
+            jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+            jsxImportSource: 'react',
+          })
+
+          // Enable TypeScript diagnostics
+          monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: false,
+            noSyntaxValidation: false,
+            noSuggestionDiagnostics: false,
+          })
+        }
+        
+        // Load types for the initial code
+        await loadTypesForCode(value)
         
         // Create editor with options
         const editor = monaco.editor.create(editorRef.current, {
@@ -42,9 +68,16 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
         }
         editor.setModel(model)
 
-        // Listen for content changes
-        model.onDidChangeContent(() => {
-          onChange(model.getValue())
+        // Listen for content changes and update types accordingly
+        model.onDidChangeContent(async () => {
+          const currentValue = model.getValue()
+          onChange(currentValue)
+          
+          // Debounce type loading to avoid excessive API calls
+          clearTimeout((window as any).__typeLoadTimeout)
+          ;(window as any).__typeLoadTimeout = setTimeout(async () => {
+            await loadTypesForCode(currentValue)
+          }, 1000) // 1 second debounce
         })
 
       } catch (error) {
@@ -62,153 +95,54 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
     }
   }, [])
 
-  // Function to add explicit type definitions
-  const addTypeDefinitions = async (monaco: any) => {
+  // Function to dynamically load type definitions for detected imports
+  const loadTypesForCode = useCallback(async (code: string) => {
+    if (!monacoRef.current) return
+
     try {
-      // Read type definitions from external file
-      const typeDefinitions = await import('/src/types/external-libs.d.ts?raw')
-        .then(module => module.default)
-        .catch(() => {
-          // Fallback to inline definitions if import fails
-          return `
-declare module 'react-icons/io5' {
-  import { IconType } from 'react-icons';
-  export const IoSparkles: IconType;
-  export const IoHeart: IconType;
-  export const IoStar: IconType;
-  export const IoPlay: IconType;
-  export const IoPause: IconType;
-  export const IoStop: IconType;
-  export const IoHome: IconType;
-  export const IoSettings: IconType;
-  export const IoSearch: IconType;
-  export const IoMenu: IconType;
-  export const IoClose: IconType;
-  export const IoAdd: IconType;
-  export const IoRemove: IconType;
-  export const IoCheckmark: IconType;
-  export const IoArrowBack: IconType;
-  export const IoArrowForward: IconType;
-  export const IoArrowUp: IconType;
-  export const IoArrowDown: IconType;
-}
+      // Parse imports from the code
+      const imports = parseImports(code)
+      
+      // Filter out packages we've already loaded
+      const newImports = imports.filter(pkg => !loadedTypesRef.current.has(pkg))
+      
+      if (newImports.length === 0) return
 
-declare module 'react-icons' {
-  export interface IconBaseProps extends React.SVGAttributes<SVGElement> {
-    children?: React.ReactNode;
-    size?: string | number;
-    color?: string;
-    title?: string;
-  }
-  export type IconType = React.ComponentType<IconBaseProps>;
-}
-
-declare module 'framer-motion' {
-  export interface MotionProps {
-    initial?: any;
-    animate?: any;
-    exit?: any;
-    transition?: any;
-    whileHover?: any;
-    whileTap?: any;
-    whileInView?: any;
-    variants?: any;
-    className?: string;
-    style?: React.CSSProperties;
-    children?: React.ReactNode;
-  }
-  
-  export interface MotionComponent {
-    (props: MotionProps & React.HTMLAttributes<HTMLElement>): JSX.Element;
-  }
-  
-  export const motion: {
-    div: MotionComponent;
-    span: MotionComponent;
-    h1: MotionComponent;
-    h2: MotionComponent;
-    h3: MotionComponent;
-    p: MotionComponent;
-    button: MotionComponent;
-    img: MotionComponent;
-    section: MotionComponent;
-    article: MotionComponent;
-    header: MotionComponent;
-    footer: MotionComponent;
-    nav: MotionComponent;
-    main: MotionComponent;
-    aside: MotionComponent;
-    ul: MotionComponent;
-    ol: MotionComponent;
-    li: MotionComponent;
-    form: MotionComponent;
-    input: MotionComponent;
-    textarea: MotionComponent;
-    select: MotionComponent;
-    label: MotionComponent;
-    table: MotionComponent;
-    tr: MotionComponent;
-    td: MotionComponent;
-    th: MotionComponent;
-    thead: MotionComponent;
-    tbody: MotionComponent;
-    tfoot: MotionComponent;
-  };
-  
-  export const AnimatePresence: React.ComponentType<{
-    children?: React.ReactNode;
-    mode?: 'wait' | 'sync' | 'popLayout';
-    initial?: boolean;
-    onExitComplete?: () => void;
-  }>;
-}
-`
-        })
-
-      // Safely access TypeScript defaults and add extra lib
-      if (monaco.languages?.typescript?.typescriptDefaults?.addExtraLib) {
-        monaco.languages.typescript.typescriptDefaults.addExtraLib(
-          typeDefinitions,
-          "file:///node_modules/@types/custom-types/index.d.ts"
-        )
-
-        // Configure TypeScript language service for better type checking
-        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-          target: monaco.languages.typescript.ScriptTarget.ES2020,
-          module: monaco.languages.typescript.ModuleKind.ESNext,
-          moduleResolution: monaco.languages.typescript.ModuleResolutionKind.Bundler,
-          allowNonTsExtensions: true,
-          allowJs: true,
-          strict: true,
-          allowSyntheticDefaultImports: true,
-          esModuleInterop: true,
-          skipLibCheck: true,
-          jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-          jsxImportSource: 'react',
-        })
-
-        // Enable TypeScript diagnostics
-        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-          noSemanticValidation: false,
-          noSyntaxValidation: false,
-          noSuggestionDiagnostics: false,
-        })
+      console.log('Loading types for packages:', newImports)
+      
+      // Load type definitions for new imports
+      const typeDefinitions = await loadTypesForPackages(newImports)
+      
+      // Add type definitions to Monaco
+      for (const [packageName, typeContent] of Object.entries(typeDefinitions)) {
+        if (monacoRef.current?.languages?.typescript?.typescriptDefaults?.addExtraLib) {
+          monacoRef.current.languages.typescript.typescriptDefaults.addExtraLib(
+            typeContent,
+            `file:///node_modules/@types/${packageName}/index.d.ts`
+          )
+          
+          // Mark this package as loaded
+          loadedTypesRef.current.add(packageName)
+          console.log(`Loaded types for ${packageName}`)
+        }
       }
 
     } catch (error) {
-      console.warn("Failed to add type definitions:", error)
+      console.warn("Failed to load dynamic types:", error)
     }
-  }
+  }, [])
 
-  // Update editor value when prop changes
+  // Update editor value when prop changes (but also reload types)
   useEffect(() => {
     if (editorInstanceRef.current) {
       const model = editorInstanceRef.current.getModel()
       if (model && model.getValue() !== value) {
         model.setValue(value)
+        // Load types for the new content
+        loadTypesForCode(value)
       }
     }
-  }, [value])
+  }, [value, loadTypesForCode])
 
   // Update font size when prop changes
   useEffect(() => {
