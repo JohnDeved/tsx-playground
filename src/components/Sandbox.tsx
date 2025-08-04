@@ -1,32 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Button } from "@/components/ui/button"
-import Editor from "@monaco-editor/react"
+import { init } from "modern-monaco"
 import { useSandboxStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 /** Minimal Monaco TSX editor (App.tsx) */
 function EditorPane(props: { value: string; onChange: (v: string) => void; fontSize: number }) {
   const { value, onChange, fontSize } = props
-  return (
-    <div className="h-full w-full overflow-hidden">
-      <div className="h-10 border-b border-zinc-800/80 flex items-center px-3 text-xs text-zinc-400 bg-zinc-950/60">
-        <span className="truncate">App.tsx</span>
-      </div>
-      <Editor
-        height="calc(100% - 2.5rem)"
-        defaultLanguage="typescript"
-        path="App.tsx"
-        value={value}
-        onChange={(v) => onChange(v ?? "")}
-        theme="vs-dark"
-        onMount={(_, monaco) => {
-          // monaco.languages.typescript.typescriptDefaults.addExtraLib() // dynamically add used libs from esm.sh X-TypeScript-Types header
-          monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-            jsx: monaco.languages.typescript.JsxEmit.ReactJSX
-          })
-        }}
-        options={{
+  const editorRef = useRef<HTMLDivElement>(null)
+  const monacoRef = useRef<any>(null)
+  const editorInstanceRef = useRef<any>(null)
+  const modelRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (!editorRef.current || editorInstanceRef.current) return
+
+    const initEditor = async () => {
+      try {
+        const monaco = await init({
+          lsp: {
+            typescript: {
+              compilerOptions: {
+                jsx: 2, // JSX.ReactJSX
+                strict: true,
+                target: 99, // ESNext
+                module: 99, // ESNext
+                moduleResolution: 100, // Bundler
+                allowImportingTsExtensions: true,
+                allowJs: true,
+                noEmit: true,
+              },
+            },
+          },
+        })
+
+        monacoRef.current = monaco
+        
+        const editor = monaco.editor.create(editorRef.current, {
           fontSize,
           minimap: { enabled: false },
           roundedSelection: true,
@@ -35,7 +46,66 @@ function EditorPane(props: { value: string; onChange: (v: string) => void; fontS
           tabSize: 2,
           automaticLayout: true,
           smoothScrolling: true,
-        }}
+          theme: "vs-dark",
+        })
+
+        editorInstanceRef.current = editor
+
+        // Check if model already exists, if not create it
+        const uri = monaco.Uri.file("App.tsx")
+        let model = monaco.editor.getModel(uri)
+        if (!model) {
+          model = monaco.editor.createModel(value, "typescript", uri)
+        }
+        modelRef.current = model
+        editor.setModel(model)
+
+        // Listen for content changes
+        model.onDidChangeContent(() => {
+          onChange(model.getValue())
+        })
+
+      } catch (error) {
+        console.error("Failed to initialize Monaco editor:", error)
+      }
+    }
+
+    initEditor()
+
+    return () => {
+      if (editorInstanceRef.current) {
+        editorInstanceRef.current.dispose()
+        editorInstanceRef.current = null
+      }
+      if (modelRef.current) {
+        modelRef.current.dispose()
+        modelRef.current = null
+      }
+    }
+  }, []) // Remove fontSize dependency to prevent re-initialization
+
+  // Update editor value when prop changes
+  useEffect(() => {
+    if (modelRef.current && modelRef.current.getValue() !== value) {
+      modelRef.current.setValue(value)
+    }
+  }, [value])
+
+  // Update font size when prop changes
+  useEffect(() => {
+    if (editorInstanceRef.current) {
+      editorInstanceRef.current.updateOptions({ fontSize })
+    }
+  }, [fontSize])
+
+  return (
+    <div className="h-full w-full overflow-hidden">
+      <div className="h-10 border-b border-zinc-800/80 flex items-center px-3 text-xs text-zinc-400 bg-zinc-950/60">
+        <span className="truncate">App.tsx</span>
+      </div>
+      <div 
+        ref={editorRef}
+        className="h-[calc(100%-2.5rem)] w-full"
       />
     </div>
   )
