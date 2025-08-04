@@ -69,113 +69,9 @@ export async function fetchTypeDefinitions(packageName: string): Promise<string 
     
     return null
   } catch (error) {
-    console.warn(`External requests blocked for ${packageName}:`, error.message)
+    console.warn(`External requests blocked for ${packageName}:`, error instanceof Error ? error.message : String(error))
     return null
   }
-}
-
-/**
- * Generate minimal type stubs for common packages when external loading fails
- */
-function generateMinimalTypeStub(packageName: string): string {
-  const stubs: Record<string, string> = {
-    'react-icons': `
-declare module 'react-icons/*' {
-  import { ComponentType } from 'react';
-  const icon: ComponentType<any>;
-  export = icon;
-}
-
-declare module 'react-icons/io5' {
-  export const IoSparkles: ComponentType<any>;
-  export const IoHome: ComponentType<any>;
-  export const IoMenu: ComponentType<any>;
-  export const IoClose: ComponentType<any>;
-  export const IoSearch: ComponentType<any>;
-  export const IoAdd: ComponentType<any>;
-  export const IoTrash: ComponentType<any>;
-  export const IoEdit: ComponentType<any>;
-  export const IoSave: ComponentType<any>;
-  export const IoDownload: ComponentType<any>;
-  export const IoUpload: ComponentType<any>;
-  export const IoRefresh: ComponentType<any>;
-  export const IoSettings: ComponentType<any>;
-  export const IoHeart: ComponentType<any>;
-  export const IoStar: ComponentType<any>;
-  export const IoThumbsUp: ComponentType<any>;
-  export const IoArrowForward: ComponentType<any>;
-  export const IoArrowBack: ComponentType<any>;
-  export const IoChevronDown: ComponentType<any>;
-  export const IoChevronUp: ComponentType<any>;
-  export const IoCheckmark: ComponentType<any>;
-}`,
-    
-    'framer-motion': `
-declare module 'framer-motion' {
-  import { ComponentType, ReactNode } from 'react';
-  
-  export interface MotionProps {
-    initial?: any;
-    animate?: any;
-    exit?: any;
-    transition?: any;
-    whileHover?: any;
-    whileTap?: any;
-    whileFocus?: any;
-    whileInView?: any;
-    drag?: boolean | 'x' | 'y';
-    dragConstraints?: any;
-    layout?: boolean;
-    layoutId?: string;
-    className?: string;
-    style?: any;
-    children?: ReactNode;
-    onClick?: () => void;
-    onHoverStart?: () => void;
-    onHoverEnd?: () => void;
-    [key: string]: any;
-  }
-  
-  export const motion: {
-    div: ComponentType<MotionProps>;
-    span: ComponentType<MotionProps>;
-    p: ComponentType<MotionProps>;
-    h1: ComponentType<MotionProps>;
-    h2: ComponentType<MotionProps>;
-    h3: ComponentType<MotionProps>;
-    button: ComponentType<MotionProps>;
-    a: ComponentType<MotionProps>;
-    img: ComponentType<MotionProps>;
-    section: ComponentType<MotionProps>;
-    article: ComponentType<MotionProps>;
-    header: ComponentType<MotionProps>;
-    footer: ComponentType<MotionProps>;
-    nav: ComponentType<MotionProps>;
-    main: ComponentType<MotionProps>;
-    aside: ComponentType<MotionProps>;
-    [key: string]: ComponentType<MotionProps>;
-  };
-  
-  export const AnimatePresence: ComponentType<{
-    children?: ReactNode;
-    mode?: 'wait' | 'sync' | 'popLayout';
-    initial?: boolean;
-    onExitComplete?: () => void;
-  }>;
-  
-  export function useAnimation(): any;
-  export function useMotionValue(initial: any): any;
-  export function useTransform(value: any, inputRange: number[], outputRange: any[]): any;
-  export function useSpring(value: any, config?: any): any;
-}`
-  }
-  
-  return stubs[packageName] || `
-declare module '${packageName}' {
-  const mod: any;
-  export = mod;
-  export default mod;
-}`
 }
 
 /**
@@ -194,14 +90,8 @@ export async function loadTypesForPackages(
   
   for (const packageName of newPackages) {
     try {
-      // First attempt dynamic loading from esm.sh
-      let typeDefinitions = await fetchTypeDefinitions(packageName)
-      
-      // If external loading fails, use minimal type stub
-      if (!typeDefinitions) {
-        console.log(`📝 Using minimal type stub for ${packageName}`)
-        typeDefinitions = generateMinimalTypeStub(packageName)
-      }
+      // Attempt dynamic loading from esm.sh
+      const typeDefinitions = await fetchTypeDefinitions(packageName)
       
       if (typeDefinitions && monaco?.languages?.typescript?.typescriptDefaults?.addExtraLib) {
         monaco.languages.typescript.typescriptDefaults.addExtraLib(
@@ -211,10 +101,14 @@ export async function loadTypesForPackages(
         
         loadedTypesRef.add(packageName)
         console.log(`✅ Loaded types for ${packageName}`)
+      } else {
+        console.log(`❌ Failed to load types for ${packageName} - external requests may be blocked`)
+        // Mark as loaded to avoid retrying
+        loadedTypesRef.add(packageName)
       }
     } catch (error) {
       console.warn(`❌ Failed to load types for ${packageName}:`, error)
-      // Still mark as loaded to avoid retrying
+      // Mark as loaded to avoid retrying
       loadedTypesRef.add(packageName)
     }
   }
