@@ -24,7 +24,6 @@ export const getConsoleLogClass = (type: "log" | "warn" | "error") => {
 
 // Monaco editor configuration
 export const MONACO_CONFIG = {
-  theme: "vitesse-dark",
   lsp: {
     typescript: {
       compilerOptions: {
@@ -67,7 +66,7 @@ export const EDITOR_OPTIONS = {
   tabSize: 2,
   automaticLayout: true,
   smoothScrolling: true,
-  theme: "vitesse-dark",
+  theme: "vs-dark",
 } as const
 
 // Debounce delay for preview updates

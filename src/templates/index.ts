@@ -1,3 +1,5 @@
+import { extractDefaultExportName } from "@/lib/utils"
+
 // Get the default App.tsx content as a string
 export function getDefaultAppContent(): string {
   return `import { IoSparkles } from "react-icons/io5";
@@ -60,6 +62,9 @@ export function generatePreviewTemplate(code: string, imports: string[]): string
     ...Object.fromEntries(imports.map(i => [i, `https://esm.sh/${i}`]))
   };
 
+  // Extract the default export name to render dynamically
+  const componentName = extractDefaultExportName(code);
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -76,7 +81,7 @@ export function generatePreviewTemplate(code: string, imports: string[]): string
   <script type="text/babel">
   import { createRoot } from "react-dom/client";
    ${code}
-    createRoot(root).render(<App />);
+    createRoot(root).render(<${componentName} />);
   </script>
 </body>
 </html>`;
