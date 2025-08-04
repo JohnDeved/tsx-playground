@@ -5,20 +5,21 @@ import { init } from "modern-monaco"
 import { useSandboxStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
-/** Minimal Monaco TSX editor (App.tsx) */
+/** Simplified Monaco TSX editor using modern-monaco's manual mode */
 function EditorPane(props: { value: string; onChange: (v: string) => void; fontSize: number }) {
   const { value, onChange, fontSize } = props
   const editorRef = useRef<HTMLDivElement>(null)
   const monacoRef = useRef<any>(null)
   const editorInstanceRef = useRef<any>(null)
-  const modelRef = useRef<any>(null)
 
   useEffect(() => {
     if (!editorRef.current || editorInstanceRef.current) return
 
     const initEditor = async () => {
       try {
+        // Use the simplified init approach
         const monaco = await init({
+          theme: "vitesse-dark",
           lsp: {
             typescript: {
               compilerOptions: {
@@ -35,46 +36,17 @@ function EditorPane(props: { value: string; onChange: (v: string) => void; fontS
                 "react": "https://esm.sh/react@18",
                 "react-dom": "https://esm.sh/react-dom@18", 
                 "react-dom/client": "https://esm.sh/react-dom@18/client",
-              },
+                "react-icons": "https://esm.sh/react-icons@5",
+                "react-icons/io5": "https://esm.sh/react-icons@5/io5",
+                "framer-motion": "https://esm.sh/framer-motion@12",
+              } as any,
             },
           },
         })
 
         monacoRef.current = monaco
         
-        // Add basic type declarations for the imported libraries
-        const reactIconsTypes = `
-declare module 'react-icons/io5' {
-  import { IconType } from 'react-icons';
-  export const IoSparkles: IconType;
-}`;
-
-        const framerMotionTypes = `
-declare module 'framer-motion' {
-  import * as React from 'react';
-  
-  export interface MotionProps {
-    initial?: any;
-    animate?: any;
-    transition?: any;
-    whileHover?: any;
-    className?: string;
-    children?: React.ReactNode;
-  }
-  
-  export const motion: {
-    div: React.ForwardRefExoticComponent<MotionProps & React.HTMLAttributes<HTMLDivElement>>;
-    h1: React.ForwardRefExoticComponent<MotionProps & React.HTMLAttributes<HTMLHeadingElement>>;
-    span: React.ForwardRefExoticComponent<MotionProps & React.HTMLAttributes<HTMLSpanElement>>;
-  };
-}`;
-
-        // Add the type declarations to TypeScript
-        if (monaco.languages.typescript?.typescriptDefaults) {
-          monaco.languages.typescript.typescriptDefaults.addExtraLib(reactIconsTypes, 'react-icons-io5.d.ts');
-          monaco.languages.typescript.typescriptDefaults.addExtraLib(framerMotionTypes, 'framer-motion.d.ts');
-        }
-        
+        // Create editor with simplified options
         const editor = monaco.editor.create(editorRef.current, {
           fontSize,
           minimap: { enabled: false },
@@ -84,18 +56,13 @@ declare module 'framer-motion' {
           tabSize: 2,
           automaticLayout: true,
           smoothScrolling: true,
-          theme: "vs-dark",
+          theme: "vitesse-dark",
         })
 
         editorInstanceRef.current = editor
 
-        // Check if model already exists, if not create it
-        const uri = monaco.Uri.file("App.tsx")
-        let model = monaco.editor.getModel(uri)
-        if (!model) {
-          model = monaco.editor.createModel(value, "typescript", uri)
-        }
-        modelRef.current = model
+        // Create and set model
+        const model = monaco.editor.createModel(value, "typescript", monaco.Uri.file("App.tsx"))
         editor.setModel(model)
 
         // Listen for content changes
@@ -115,17 +82,16 @@ declare module 'framer-motion' {
         editorInstanceRef.current.dispose()
         editorInstanceRef.current = null
       }
-      if (modelRef.current) {
-        modelRef.current.dispose()
-        modelRef.current = null
-      }
     }
-  }, []) // Remove fontSize dependency to prevent re-initialization
+  }, [])
 
   // Update editor value when prop changes
   useEffect(() => {
-    if (modelRef.current && modelRef.current.getValue() !== value) {
-      modelRef.current.setValue(value)
+    if (editorInstanceRef.current) {
+      const model = editorInstanceRef.current.getModel()
+      if (model && model.getValue() !== value) {
+        model.setValue(value)
+      }
     }
   }, [value])
 
