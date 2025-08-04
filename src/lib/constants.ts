@@ -35,16 +35,25 @@ export const MONACO_CONFIG = {
         moduleResolution: 100, // Bundler
         allowImportingTsExtensions: true,
         allowJs: true,
+        allowSyntheticDefaultImports: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
         noEmit: true,
+        types: ["react", "react-dom"],
       },
       importMap: {
-        "react": "https://esm.sh/react@18",
-        "react-dom": "https://esm.sh/react-dom@18", 
-        "react-dom/client": "https://esm.sh/react-dom@18/client",
-        "react-icons": "https://esm.sh/react-icons@5",
-        "react-icons/io5": "https://esm.sh/react-icons@5/io5",
-        "framer-motion": "https://esm.sh/framer-motion@12",
-      } as any,
+        imports: {
+          "react": "https://esm.sh/react@18",
+          "react-dom": "https://esm.sh/react-dom@18", 
+          "react-dom/client": "https://esm.sh/react-dom@18/client",
+          "react-icons": "https://esm.sh/react-icons@5",
+          "react-icons/io5": "https://esm.sh/react-icons@5/io5",
+          "framer-motion": "https://esm.sh/framer-motion@12",
+        },
+        scopes: {}
+      },
+      // Ensure TypeScript version compatibility
+      tsVersion: "5.5.4",
     },
   },
 } as const
