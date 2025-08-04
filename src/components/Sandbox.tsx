@@ -61,8 +61,14 @@ function EditorPane(props: { value: string; onChange: (v: string) => void; fontS
 
         editorInstanceRef.current = editor
 
-        // Create and set model
-        const model = monaco.editor.createModel(value, "typescript", monaco.Uri.file("App.tsx"))
+        // Create or get existing model
+        const uri = monaco.Uri.file("App.tsx")
+        let model = monaco.editor.getModel(uri)
+        if (!model) {
+          model = monaco.editor.createModel(value, "typescript", uri)
+        } else {
+          model.setValue(value)
+        }
         editor.setModel(model)
 
         // Listen for content changes
