@@ -1,22 +1,12 @@
 import { Button } from "@/components/ui/button"
 import { useSandboxStore } from "@/lib/store"
-import { cn } from "@/lib/utils"
+import { getConsoleLogClass } from "@/lib/constants"
 
 export function ConsolePanel() {
   const logs = useSandboxStore((s) => s.consoleLogs)
   const open = useSandboxStore((s) => s.consoleOpen)
   const setOpen = useSandboxStore((s) => s.setConsoleOpen)
   const clear = useSandboxStore((s) => s.clearConsole)
-
-  const getLogItemClass = (type: "log" | "warn" | "error") =>
-    cn(
-      "rounded-md px-2 py-1",
-      type === "error"
-        ? "bg-red-500/10 text-red-400 border border-red-500/20"
-        : type === "warn"
-        ? "bg-amber-500/10 text-amber-300 border border-amber-500/20"
-        : "bg-zinc-500/10 text-zinc-200 border border-zinc-500/20"
-    )
 
   return (
     <div className="w-full border-t border-zinc-800/80 bg-zinc-950/70">
@@ -35,7 +25,7 @@ export function ConsolePanel() {
               <div className="text-muted-foreground">No messages</div>
             ) : (
               logs.map((log, index) => (
-                <div key={index} className={getLogItemClass(log.type)}>
+                <div key={index} className={getConsoleLogClass(log.type)}>
                   <span className="opacity-60 mr-2">
                     {new Date(log.time).toLocaleTimeString()}
                   </span>

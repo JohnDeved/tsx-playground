@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react"
 import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useSandboxStore } from "@/lib/store"
 import { EditorPane } from "@/components/editor/EditorPane"
 import { PreviewPane } from "@/components/preview/PreviewPane"
 import { ConsolePanel } from "@/components/console/ConsolePanel"
+import { PREVIEW_DEBOUNCE_DELAY, PANEL_CONTAINER_CLASS } from "@/lib/constants"
+import { useDebounce, useResponsiveLayout, useDarkMode } from "@/hooks"
 
 export default function Sandbox() {
   const editorContent = useSandboxStore((s) => s.editorContent)
@@ -12,29 +13,10 @@ export default function Sandbox() {
   const { orientation, editorRatio, previewRatio } = useSandboxStore((s) => s.layout)
   const setLayout = useSandboxStore((s) => s.setLayout)
 
-  // Debounce preview updates
-  const [debouncedCode, setDebouncedCode] = useState(editorContent)
-  useEffect(() => {
-    const timeoutId = setTimeout(() => setDebouncedCode(editorContent), 250)
-    return () => clearTimeout(timeoutId)
-  }, [editorContent])
-
-  // Force dark mode class
-  useEffect(() => {
-    document?.documentElement.classList.add("dark")
-  }, [])
-
-  // Responsive orientation
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 768px)")
-    const handleChange = () => setLayout({ 
-      orientation: mediaQuery.matches ? "vertical" : "horizontal" 
-    })
-    
-    handleChange()
-    mediaQuery.addEventListener?.("change", handleChange)
-    return () => mediaQuery.removeEventListener?.("change", handleChange)
-  }, [setLayout])
+  // Use custom hooks for cleaner logic
+  const debouncedCode = useDebounce(editorContent, PREVIEW_DEBOUNCE_DELAY)
+  useDarkMode()
+  useResponsiveLayout(setLayout)
 
   const handleResize = (size: number | string) => {
     const ratio = (size as number) / 100
@@ -58,7 +40,7 @@ export default function Sandbox() {
                 minSize={15} 
                 onResize={handleResize}
               >
-                <div className="h-full rounded-lg border border-zinc-800/80 overflow-hidden bg-zinc-950">
+                <div className={PANEL_CONTAINER_CLASS}>
                   <EditorPane 
                     value={editorContent} 
                     onChange={setEditorContent} 
@@ -70,7 +52,7 @@ export default function Sandbox() {
               <ResizableHandle withHandle className="mx-0.5 my-0.5 rounded-full" />
               
               <ResizablePanel defaultSize={previewRatio * 100} minSize={15}>
-                <div className="h-full rounded-lg border border-zinc-800/80 overflow-hidden bg-zinc-950 flex flex-col">
+                <div className={`${PANEL_CONTAINER_CLASS} flex flex-col`}>
                   <div className="flex-1 min-h-0">
                     <PreviewPane code={debouncedCode} />
                   </div>

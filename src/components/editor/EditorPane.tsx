@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { init } from "modern-monaco"
+import { MONACO_CONFIG, EDITOR_OPTIONS, PANEL_HEADER_CLASS } from "@/lib/constants"
 
 interface EditorPaneProps {
   value: string
@@ -17,46 +18,13 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
 
     const initEditor = async () => {
       try {
-        // Use the simplified init approach
-        const monaco = await init({
-          theme: "vitesse-dark",
-          lsp: {
-            typescript: {
-              compilerOptions: {
-                jsx: 2, // JSX.ReactJSX
-                strict: true,
-                target: 99, // ESNext
-                module: 99, // ESNext
-                moduleResolution: 100, // Bundler
-                allowImportingTsExtensions: true,
-                allowJs: true,
-                noEmit: true,
-              },
-              importMap: {
-                "react": "https://esm.sh/react@18",
-                "react-dom": "https://esm.sh/react-dom@18", 
-                "react-dom/client": "https://esm.sh/react-dom@18/client",
-                "react-icons": "https://esm.sh/react-icons@5",
-                "react-icons/io5": "https://esm.sh/react-icons@5/io5",
-                "framer-motion": "https://esm.sh/framer-motion@12",
-              } as any,
-            },
-          },
-        })
-
+        const monaco = await init(MONACO_CONFIG)
         monacoRef.current = monaco
         
-        // Create editor with simplified options
+        // Create editor with options
         const editor = monaco.editor.create(editorRef.current, {
+          ...EDITOR_OPTIONS,
           fontSize,
-          minimap: { enabled: false },
-          roundedSelection: true,
-          scrollBeyondLastLine: false,
-          wordWrap: "on",
-          tabSize: 2,
-          automaticLayout: true,
-          smoothScrolling: true,
-          theme: "vitesse-dark",
         })
 
         editorInstanceRef.current = editor
@@ -110,7 +78,7 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
 
   return (
     <div className="h-full w-full overflow-hidden">
-      <div className="h-10 border-b border-zinc-800/80 flex items-center px-3 text-xs text-zinc-400 bg-zinc-950/60">
+      <div className={PANEL_HEADER_CLASS}>
         <span className="truncate">App.tsx</span>
       </div>
       <div 

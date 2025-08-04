@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useSandboxStore } from "@/lib/store"
 import { generatePreviewTemplate } from "@/templates"
+import { PANEL_HEADER_CLASS, BACKGROUND_MAIN } from "@/lib/constants"
+import { extractImports } from "@/lib/utils"
 
 interface PreviewPaneProps {
   code: string
@@ -11,13 +13,7 @@ export function PreviewPane({ code }: PreviewPaneProps) {
   const appendConsole = useSandboxStore((s) => s.appendConsole)
 
   // Extract imports used in the code
-  const foundImports = useMemo(() => {
-    if (!code) return []
-    return Array.from(
-      code.matchAll(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/g), 
-      match => match[1]
-    )
-  }, [code])
+  const foundImports = useMemo(() => extractImports(code), [code])
 
   console.log("Preview imports:", foundImports)
 
@@ -43,8 +39,8 @@ export function PreviewPane({ code }: PreviewPaneProps) {
   }, [appendConsole])
 
   return (
-    <div className="h-full w-full overflow-hidden bg-zinc-950 flex flex-col">
-      <div className="h-10 border-b border-zinc-800/80 flex items-center justify-between px-3 text-xs text-zinc-400 bg-zinc-950/60 shrink-0">
+    <div className={`h-full w-full overflow-hidden ${BACKGROUND_MAIN} flex flex-col`}>
+      <div className={`${PANEL_HEADER_CLASS} justify-between shrink-0`}>
         <span className="truncate">Preview</span>
         <span className="opacity-60">tsx via esm.sh</span>
       </div>
