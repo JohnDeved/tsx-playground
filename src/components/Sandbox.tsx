@@ -1,15 +1,14 @@
 import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useSandboxStore } from "@/lib/store"
-import { EditorPane } from "@/components/editor/EditorPane"
-import { PreviewPane } from "@/components/preview/PreviewPane"
-import { ConsolePanel } from "@/components/console/ConsolePanel"
+import EditorPane from "@/components/editor/EditorPane"
+import PreviewPane from "@/components/preview/PreviewPane"
+import ConsolePanel from "@/components/console/ConsolePanel"
 import { PREVIEW_DEBOUNCE_DELAY, PANEL_CONTAINER_CLASS } from "@/lib/constants"
 import { useDebounce, useResponsiveLayout, useDarkMode } from "@/hooks"
 
 export default function Sandbox() {
   const editorContent = useSandboxStore((s) => s.editorContent)
   const setEditorContent = useSandboxStore((s) => s.setEditorContent)
-  const fontSize = useSandboxStore((s) => s.fontSize)
   const { orientation, editorRatio, previewRatio } = useSandboxStore((s) => s.layout)
   const setLayout = useSandboxStore((s) => s.setLayout)
 
@@ -44,7 +43,6 @@ export default function Sandbox() {
                   <EditorPane 
                     value={editorContent} 
                     onChange={setEditorContent} 
-                    fontSize={fontSize} 
                   />
                 </div>
               </ResizablePanel>

@@ -2,7 +2,9 @@ import { Button } from "@/components/ui/button"
 import { useSandboxStore } from "@/lib/store"
 import { getConsoleLogClass } from "@/lib/constants"
 
-export function ConsolePanel() {
+interface ConsolePanelProps {}
+
+export default function ConsolePanel({}: ConsolePanelProps) {
   const logs = useSandboxStore((s) => s.consoleLogs)
   const open = useSandboxStore((s) => s.consoleOpen)
   const setOpen = useSandboxStore((s) => s.setConsoleOpen)

@@ -1,14 +1,50 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useSandboxStore } from "@/lib/store"
-import { generatePreviewTemplate } from "@/templates"
 import { PANEL_HEADER_CLASS, BACKGROUND_MAIN } from "@/lib/constants"
-import { extractImports } from "@/lib/utils"
+import { extractImports, extractDefaultExportName } from "@/lib/utils"
 
 interface PreviewPaneProps {
   code: string
 }
 
-export function PreviewPane({ code }: PreviewPaneProps) {
+// Generate the preview iframe HTML template
+function generatePreviewTemplate(code: string, imports: string[]): string {
+  const importMap = {
+    "react": "https://esm.sh/react",
+    "react-dom/client": "https://esm.sh/react-dom/client",
+    ...Object.fromEntries(imports.map(i => [i, `https://esm.sh/${i}`]))
+  };
+
+  // Extract the default export name to render dynamically
+  const componentName = extractDefaultExportName(code);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <script type="importmap">
+    {
+      "imports": ${JSON.stringify(importMap)}
+    }
+  </script>
+  <script type="module" src="https://esm.sh/tsx"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+  import { createRoot } from "react-dom/client";
+   ${code}
+    createRoot(root).render(<${componentName} />);
+  </script>
+</body>
+</html>`;
+}
+
+interface PreviewPaneProps {
+  code: string
+}
+
+export default function PreviewPane({ code }: PreviewPaneProps) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const appendConsole = useSandboxStore((s) => s.appendConsole)
 

@@ -66,7 +66,7 @@ export const EDITOR_OPTIONS = {
   tabSize: 2,
   automaticLayout: true,
   smoothScrolling: true,
-  theme: "vs-dark",
+  theme: "OneDark-Pro",
 } as const
 
 // Debounce delay for preview updates
