@@ -31,11 +31,49 @@ function EditorPane(props: { value: string; onChange: (v: string) => void; fontS
                 allowJs: true,
                 noEmit: true,
               },
+              importMap: {
+                "react": "https://esm.sh/react@18",
+                "react-dom": "https://esm.sh/react-dom@18", 
+                "react-dom/client": "https://esm.sh/react-dom@18/client",
+              },
             },
           },
         })
 
         monacoRef.current = monaco
+        
+        // Add basic type declarations for the imported libraries
+        const reactIconsTypes = `
+declare module 'react-icons/io5' {
+  import { IconType } from 'react-icons';
+  export const IoSparkles: IconType;
+}`;
+
+        const framerMotionTypes = `
+declare module 'framer-motion' {
+  import * as React from 'react';
+  
+  export interface MotionProps {
+    initial?: any;
+    animate?: any;
+    transition?: any;
+    whileHover?: any;
+    className?: string;
+    children?: React.ReactNode;
+  }
+  
+  export const motion: {
+    div: React.ForwardRefExoticComponent<MotionProps & React.HTMLAttributes<HTMLDivElement>>;
+    h1: React.ForwardRefExoticComponent<MotionProps & React.HTMLAttributes<HTMLHeadingElement>>;
+    span: React.ForwardRefExoticComponent<MotionProps & React.HTMLAttributes<HTMLSpanElement>>;
+  };
+}`;
+
+        // Add the type declarations to TypeScript
+        if (monaco.languages.typescript?.typescriptDefaults) {
+          monaco.languages.typescript.typescriptDefaults.addExtraLib(reactIconsTypes, 'react-icons-io5.d.ts');
+          monaco.languages.typescript.typescriptDefaults.addExtraLib(framerMotionTypes, 'framer-motion.d.ts');
+        }
         
         const editor = monaco.editor.create(editorRef.current, {
           fontSize,
