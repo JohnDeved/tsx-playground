@@ -6,6 +6,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+    "resolveJsonModule": true,
  
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -29,9 +30,10 @@
       "@/*": ["src/*"]
     },
  
-    /* Allow CSS imports (Tailwind entry) */
-    "types": ["@types/react", "@types/react-dom"],
+    /* React types support */
+    "types": ["node"],
     "allowUnusedLabels": false
   },
-  "include": ["src", "src/**/*.css"]
+  "include": ["src", "src/**/*.css"],
+  "exclude": ["vite.config.ts"]
 }

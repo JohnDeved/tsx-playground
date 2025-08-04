@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react"
 import { init } from "modern-monaco"
 import { MONACO_CONFIG, EDITOR_OPTIONS, PANEL_HEADER_CLASS } from "@/lib/constants"
-import { parseImports, loadTypesForPackages } from "@/lib/type-loader"
+import { parseImports, getBuiltInTypes } from "@/lib/type-loader"
 
 interface EditorPaneProps {
   value: string
@@ -45,6 +45,47 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
             noSyntaxValidation: false,
             noSuggestionDiagnostics: false,
           })
+          
+          // Add basic React types to prevent "Loading..." state
+          const basicReactTypes = `
+declare module 'react' {
+  interface FC<P = {}> {
+    (props: P): JSX.Element | null;
+  }
+  interface Component<P = {}, S = {}> {
+    render(): JSX.Element | null;
+  }
+  function createElement(type: any, props?: any, ...children: any[]): JSX.Element;
+  function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void];
+  function useEffect(effect: () => void | (() => void), deps?: any[]): void;
+  function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T;
+  function useRef<T>(initialValue: T): { current: T };
+  const StrictMode: FC<{ children?: any }>;
+}
+
+declare module 'react-dom/client' {
+  interface Root {
+    render(children: any): void;
+  }
+  function createRoot(container: Element | DocumentFragment): Root;
+}
+
+declare namespace JSX {
+  interface IntrinsicElements {
+    [elemName: string]: any;
+  }
+  interface Element {
+    type: any;
+    props: any;
+    key: any;
+  }
+}
+`
+          
+          monaco.languages.typescript.typescriptDefaults.addExtraLib(
+            basicReactTypes,
+            'file:///node_modules/@types/react/index.d.ts'
+          )
         }
         
         // Load types for the initial code
@@ -110,25 +151,29 @@ export function EditorPane({ value, onChange, fontSize }: EditorPaneProps) {
 
       console.log('Loading types for packages:', newImports)
       
-      // Load type definitions for new imports
-      const typeDefinitions = await loadTypesForPackages(newImports)
+      // Provide built-in type definitions for common packages since external requests are blocked
+      const builtInTypes = getBuiltInTypes()
       
-      // Add type definitions to Monaco
-      for (const [packageName, typeContent] of Object.entries(typeDefinitions)) {
-        if (monacoRef.current?.languages?.typescript?.typescriptDefaults?.addExtraLib) {
-          monacoRef.current.languages.typescript.typescriptDefaults.addExtraLib(
-            typeContent,
-            `file:///node_modules/@types/${packageName}/index.d.ts`
-          )
-          
-          // Mark this package as loaded
-          loadedTypesRef.current.add(packageName)
-          console.log(`Loaded types for ${packageName}`)
+      // Add type definitions to Monaco for each new import
+      for (const packageName of newImports) {
+        if (builtInTypes[packageName]) {
+          if (monacoRef.current?.languages?.typescript?.typescriptDefaults?.addExtraLib) {
+            monacoRef.current.languages.typescript.typescriptDefaults.addExtraLib(
+              builtInTypes[packageName],
+              `file:///node_modules/@types/${packageName}/index.d.ts`
+            )
+            
+            // Mark this package as loaded
+            loadedTypesRef.current.add(packageName)
+            console.log(`Loaded built-in types for ${packageName}`)
+          }
+        } else {
+          console.log(`No built-in types available for ${packageName}`)
         }
       }
 
     } catch (error) {
-      console.warn("Failed to load dynamic types:", error)
+      console.warn("Failed to load types:", error)
     }
   }, [])
 
