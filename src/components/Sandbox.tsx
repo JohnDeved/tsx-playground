@@ -1,42 +1,139 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Button } from "@/components/ui/button"
-import Editor from "@monaco-editor/react"
 import { useSandboxStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { init } from "modern-monaco"
+import * as monacoTypes from "monaco-editor"
+// Use upstream monaco-editor types while keeping modern-monaco for runtime
+type Monaco = typeof monacoTypes
 
-/** Minimal Monaco TSX editor (App.tsx) */
+/** Minimal Monaco TSX editor (App.tsx) using modern-monaco Manual mode */
 function EditorPane(props: { value: string; onChange: (v: string) => void; fontSize: number }) {
   const { value, onChange, fontSize } = props
+
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  // Defer typing to runtime to avoid requiring monaco-editor-core type package
+  const editorRef = useRef<monacoTypes.editor.IStandaloneCodeEditor | null>(null)
+  const modelRef = useRef<monacoTypes.editor.ITextModel | null>(null)
+  const monacoRef = useRef<Monaco | null>(null)
+  const resizeObsRef = useRef<ResizeObserver | null>(null)
+  const lastEmittedRef = useRef<string>("")
+
+  useEffect(() => {
+    let disposed = false
+    ;(async () => {
+      // Load monaco via modern-monaco
+      const monaco: Monaco = await init({
+        theme: "tokyo-night",
+        langs: ["typescript"],
+        lsp: {
+          typescript: {
+            compilerOptions: {
+              jsx: monacoTypes.languages.typescript.JsxEmit.Preserve,
+            },
+            importMap: {
+              imports: {
+                react: "https://esm.sh/react",
+                "react-dom/client": "https://esm.sh/react-dom/client",
+                "framer-motion": "https://esm.sh/framer-motion",
+                "react-icons/io5": "https://esm.sh/react-icons/io5",
+              },
+              scopes: {}
+            }
+          },
+        },
+      })
+      
+      if (disposed) return
+      monacoRef.current = monaco
+
+      // // Configure TS compiler options similar to previous setup
+      // monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      //   jsx: monaco.languages.typescript.JsxEmit.Preserve,
+      // })
+
+      // Create model once
+      const model =
+        modelRef.current ?? monaco.editor.createModel(value ?? "", "typescript", monaco.Uri.parse("inmemory://model/App.tsx"))
+      modelRef.current = model
+      lastEmittedRef.current = model.getValue()
+
+      // Create editor
+      const editor = monaco.editor.create(containerRef.current!, {
+        model,
+      })
+      editorRef.current = editor
+
+      // Relay changes upward
+      const sub = editor.onDidChangeModelContent(() => {
+        const text = model.getValue()
+        lastEmittedRef.current = text
+        onChange(text)
+      })
+
+      // Observe size changes
+      resizeObsRef.current = new ResizeObserver(() => {
+        const el = containerRef.current
+        if (!el || !editorRef.current) return
+        editorRef.current.layout({ width: el.clientWidth, height: el.clientHeight - 40 /* header height */ })
+      })
+      if (containerRef.current) {
+        resizeObsRef.current.observe(containerRef.current)
+      }
+
+      // Initial layout tick
+      setTimeout(() => {
+        const el = containerRef.current
+        if (el && editorRef.current) {
+          editorRef.current.layout({ width: el.clientWidth, height: el.clientHeight - 40 })
+        }
+      }, 0)
+
+      // Cleanup
+      return () => {
+        sub.dispose()
+      }
+    })()
+
+    return () => {
+      disposed = true
+      resizeObsRef.current?.disconnect()
+      resizeObsRef.current = null
+      if (editorRef.current) {
+        editorRef.current.dispose()
+        editorRef.current = null
+      }
+      if (modelRef.current) {
+        modelRef.current.dispose()
+        modelRef.current = null
+      }
+      monacoRef.current = null
+    }
+  }, [])
+
+  // Prop: value -> model (avoid loops)
+  useEffect(() => {
+    const model = modelRef.current
+    if (!model) return
+    if (value !== lastEmittedRef.current && value !== model.getValue()) {
+      model.setValue(value ?? "")
+    }
+  }, [value])
+
+  // Prop: fontSize -> editor option
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.updateOptions({ fontSize })
+  }, [fontSize])
+
   return (
     <div className="h-full w-full overflow-hidden">
       <div className="h-10 border-b border-zinc-800/80 flex items-center px-3 text-xs text-zinc-400 bg-zinc-950/60">
         <span className="truncate">App.tsx</span>
       </div>
-      <Editor
-        height="calc(100% - 2.5rem)"
-        defaultLanguage="typescript"
-        path="App.tsx"
-        value={value}
-        onChange={(v) => onChange(v ?? "")}
-        theme="vs-dark"
-        onMount={(_, monaco) => {
-          // monaco.languages.typescript.typescriptDefaults.addExtraLib() // dynamically add used libs from esm.sh X-TypeScript-Types header
-          monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-            jsx: monaco.languages.typescript.JsxEmit.Preserve,
-          })
-        }}
-        options={{
-          fontSize,
-          minimap: { enabled: false },
-          roundedSelection: true,
-          scrollBeyondLastLine: false,
-          wordWrap: "on",
-          tabSize: 2,
-          automaticLayout: true,
-          smoothScrolling: true,
-        }}
-      />
+      <div ref={containerRef} className="h-[calc(100%-2.5rem)] w-full" />
     </div>
   )
 }
