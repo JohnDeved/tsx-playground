@@ -30,7 +30,8 @@
     },
  
     /* Allow CSS imports (Tailwind entry) */
-    "types": ["vite/client"]
+    "types": ["@types/react", "@types/react-dom"],
+    "allowUnusedLabels": false
   },
   "include": ["src", "src/**/*.css"]
 }

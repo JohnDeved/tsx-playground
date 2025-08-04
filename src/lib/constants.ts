@@ -39,7 +39,7 @@ export const MONACO_CONFIG = {
         esModuleInterop: true,
         skipLibCheck: true,
         noEmit: true,
-        types: ["react", "react-dom"],
+        types: ["react", "react-dom"] as string[],
       },
       importMap: {
         imports: {
@@ -56,7 +56,7 @@ export const MONACO_CONFIG = {
       tsVersion: "5.5.4",
     },
   },
-} as const
+}
 
 // Editor options
 export const EDITOR_OPTIONS = {
