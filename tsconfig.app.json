@@ -31,7 +31,6 @@
     },
  
     /* React types support */
-    "types": ["node"],
     "allowUnusedLabels": false
   },
   "include": ["src", "src/**/*.css"],

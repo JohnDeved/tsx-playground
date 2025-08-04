@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react"
 import { init } from "modern-monaco"
 import { MONACO_CONFIG, EDITOR_OPTIONS, PANEL_HEADER_CLASS } from "@/lib/constants"
-import { parseImports, getBuiltInTypes } from "@/lib/type-loader"
+import { parseImports, loadTypesForPackages } from "@/lib/type-loader"
 
 interface EditorPaneProps {
   value: string
@@ -144,33 +144,12 @@ declare namespace JSX {
       // Parse imports from the code
       const imports = parseImports(code)
       
-      // Filter out packages we've already loaded
-      const newImports = imports.filter(pkg => !loadedTypesRef.current.has(pkg))
-      
-      if (newImports.length === 0) return
+      if (imports.length === 0) return
 
-      console.log('Loading types for packages:', newImports)
+      console.log('Found imports:', imports)
       
-      // Provide built-in type definitions for common packages since external requests are blocked
-      const builtInTypes = getBuiltInTypes()
-      
-      // Add type definitions to Monaco for each new import
-      for (const packageName of newImports) {
-        if (builtInTypes[packageName]) {
-          if (monacoRef.current?.languages?.typescript?.typescriptDefaults?.addExtraLib) {
-            monacoRef.current.languages.typescript.typescriptDefaults.addExtraLib(
-              builtInTypes[packageName],
-              `file:///node_modules/@types/${packageName}/index.d.ts`
-            )
-            
-            // Mark this package as loaded
-            loadedTypesRef.current.add(packageName)
-            console.log(`Loaded built-in types for ${packageName}`)
-          }
-        } else {
-          console.log(`No built-in types available for ${packageName}`)
-        }
-      }
+      // Load types for the detected packages
+      await loadTypesForPackages(imports, monacoRef.current, loadedTypesRef.current)
 
     } catch (error) {
       console.warn("Failed to load types:", error)
