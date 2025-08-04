@@ -23,7 +23,7 @@ function EditorPane(props: { value: string; onChange: (v: string) => void; fontS
         onMount={(_, monaco) => {
           // monaco.languages.typescript.typescriptDefaults.addExtraLib() // dynamically add used libs from esm.sh X-TypeScript-Types header
           monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-            jsx: monaco.languages.typescript.JsxEmit.ReactJSX
+            jsx: monaco.languages.typescript.JsxEmit.Preserve,
           })
         }}
         options={{
